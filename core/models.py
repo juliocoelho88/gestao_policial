@@ -10,6 +10,10 @@ class Policial(models.Model):
     def __str__(self):
         return f"{self.graduacao} {self.nome_guerra}"
 
+    class Meta:
+        verbose_name = "Policial"
+        verbose_name_plural = "👮 Cadastro de Policiais"
+
 
 class Producao(models.Model):
     policial = models.ForeignKey(Policial, on_delete=models.CASCADE)
@@ -46,25 +50,66 @@ class Producao(models.Model):
     def __str__(self):
         return f"{self.policial.nome_guerra} - {self.data}"
 
+    @staticmethod
+    def pesos_pontuacao():
+        return {
+            'pessoa': 0.01,
+            'pessoas_aisp': 0.1,
+            'carros': 0.01,
+            'carros_aisp': 0.1,
+            'motos': 0.01,
+            'motos_aisp': 0.1,
+            'qnt_ocorrencias': 0.01,
+            'flagrantes': 2,
+            'flagrantes_aisp': 3,
+            'autuacoes': 0.05,
+            'raia': 0.05,
+            'procurado': 1,
+            'carro_apreendido': 0.2,
+            'moto_apreendida': 0.2,
+            'flagrantes_outros': 0.5,
+            'arma': 1,
+            'escolas': 0.01,
+        }
+
     @property
     def pontuacao(self):
-        return (
-                self.pessoa * 1 +
-                self.pessoas_aisp * 5 +
-                self.carros * 1 +
-                self.carros_aisp * 5 +
-                self.motos * 1 +
-                self.motos_aisp * 5 +
-                self.qnt_ocorrencias * 3 +
-                self.flagrantes * 4 +
-                self.flagrantes_aisp * 8 +
-                self.autuacoes * 2 +
-                self.raia * 1 +
-                self.procurado * 10 +
-                self.carro_apreendido * 6 +
-                self.moto_apreendida * 6 +
-                self.flagrantes_outros * 4 +
-                self.arma * 10 +
-                self.escolas * 2
-        )
+        pesos = self.pesos_pontuacao()
+        return sum(getattr(self, campo) * peso for campo, peso in pesos.items())
+
+    class Meta:
+        verbose_name = "Produção"
+        verbose_name_plural = "➕ Cadastrar Produção"
+
+
+from django.db import models
+
+class Formacao(models.Model):
+    TIPO_CHOICES = [
+        ('curso', 'Curso'),
+        ('estagio', 'Estágio'),
+    ]
+
+    nome = models.CharField(max_length=100)
+    tipo = models.CharField(max_length=10, choices=TIPO_CHOICES)
+    local = models.CharField(max_length=100)
+    data_inicio = models.DateField()
+    data_fim = models.DateField()
+
+    def __str__(self):
+        return f"{self.nome} - {self.data_inicio.strftime('%d/%m/%Y')}"
+
+
+class Participacao(models.Model):
+    policial = models.ForeignKey('Policial', on_delete=models.CASCADE)
+    formacao = models.ForeignKey(Formacao, on_delete=models.CASCADE)
+    presente = models.BooleanField(default=True)
+    observacoes = models.TextField(blank=True, null=True)
+
+    class Meta:
+        unique_together = ('policial', 'formacao')
+
+    def __str__(self):
+        return f"{self.policial.nome_guerra} - {self.formacao.nome}"
+
 
