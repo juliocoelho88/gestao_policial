@@ -27,9 +27,9 @@ python -m venv .venv
 
 pip install -r requirements.txt
 
-# Config .env
-copy .env.example .env   # Windows
-# cp .env.example .env   # Linux/Mac
+# Config ..env
+copy ..env ..env   # Windows
+# cp ..env ..env   # Linux/Mac
 
 # Migrações e usuário admin
 python manage.py migrate
