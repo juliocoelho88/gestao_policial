@@ -82,8 +82,6 @@ class Producao(models.Model):
         verbose_name_plural = "➕ Cadastrar Produção"
 
 
-from django.db import models
-
 class Formacao(models.Model):
     TIPO_CHOICES = [
         ('curso', 'Curso'),
@@ -113,3 +111,35 @@ class Participacao(models.Model):
         return f"{self.policial.nome_guerra} - {self.formacao.nome}"
 
 
+class EquipeProdutividade(models.Model):
+    pelotao = models.CharField(max_length=20)
+    data = models.DateField()
+    policiais = models.ManyToManyField('Policial')
+
+    pessoa = models.IntegerField(default=0)
+    carros = models.IntegerField(default=0)
+    motos = models.IntegerField(default=0)
+    pessoas_aisp = models.IntegerField(default=0)
+    carros_aisp = models.IntegerField(default=0)
+    motos_aisp = models.IntegerField(default=0)
+    qnt_ocorrencias = models.IntegerField(default=0)
+    flagrantes = models.IntegerField(default=0)
+    flagrantes_aisp = models.IntegerField(default=0)
+    autuacoes = models.IntegerField(default=0)
+    raia = models.IntegerField(default=0)
+    procurado = models.IntegerField(default=0)
+    carro_apreendido = models.IntegerField(default=0)
+    moto_apreendida = models.IntegerField(default=0)
+    flagrantes_outros = models.IntegerField(default=0)
+    arma = models.IntegerField(default=0)
+    escolas = models.IntegerField(default=0)
+
+    observacao = models.TextField(blank=True, null=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Equipe {self.pelotao} - {self.data.strftime('%d/%m/%Y')}"
+
+    class Meta:
+        verbose_name = "Equipe"
+        verbose_name_plural = "📋 Lançamento por Equipe"
