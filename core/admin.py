@@ -181,3 +181,48 @@ class ProducaoAdmin(admin.ModelAdmin):
         return f"{obj.pontuacao:.2f}"
     # (tinha um typo aqui)
     pontuacao_formatada.short_description = "Pontuação"
+
+
+@admin.register(EquipeProdutividade)
+class EquipeProdutividadeAdmin(admin.ModelAdmin):
+    list_display = ('data', 'pelotao', 'pontuacao', 'gerou_individual')
+    filter_horizontal = ('policiais',)
+    list_filter = ('pelotao', 'data', 'gerou_individual')
+    search_fields = ('pelotao',)
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+
+        if obj.gerou_individual:
+            # ⚠️ Remove produções antigas para evitar duplicação
+            Producao.objects.filter(data=obj.data, policial__in=obj.policiais.all()).delete()
+
+            # 🚀 Gera novamente para cada policial
+            for policial in obj.policiais.all():
+                Producao.objects.create(
+                    policial=policial,
+                    data=obj.data,
+                    pessoa=obj.pessoa,
+                    carros=obj.carros,
+                    motos=obj.motos,
+                    pessoas_aisp=obj.pessoas_aisp,
+                    carros_aisp=obj.carros_aisp,
+                    motos_aisp=obj.motos_aisp,
+                    qnt_ocorrencias=obj.qnt_ocorrencias,
+                    flagrantes=obj.flagrantes,
+                    flagrantes_aisp=obj.flagrantes_aisp,
+                    autuacoes=obj.autuacoes,
+                    raia=obj.raia,
+                    procurado=obj.procurado,
+                    carro_apreendido=obj.carro_apreendido,
+                    moto_apreendida=obj.moto_apreendida,
+                    flagrantes_outros=obj.flagrantes_outros,
+                    arma=obj.arma,
+                    escolas=obj.escolas,
+                    observacao=f"(Equipe) {obj.observacao or ''}".strip(),
+                )
+
+            self.message_user(request, f"✔ Produção individual atualizada para {obj.policiais.count()} policiais.")
+
+        else:
+            self.message_user(request, "ℹ️ Produção individual **não** foi gerada. Marque 'gerou individual' para habilitar esse recurso.", level=messages.WARNING)
