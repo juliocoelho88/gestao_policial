@@ -1,10 +1,9 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.admin import DateFieldListFilter
-from django.http import HttpResponse, HttpResponseRedirect
-from .models import Policial, Producao, Formacao, Participacao
+from django.http import HttpResponse
+from .models import Policial, Producao, Formacao, Participacao, EquipeProdutividade
 from .menu import RankingPlaceholder, ExportacaoPlaceholder
-import os
-import csv
+import os, csv
 from datetime import datetime
 from decimal import Decimal
 from openpyxl import Workbook
@@ -37,7 +36,10 @@ class ProducaoAdmin(admin.ModelAdmin):
             return False
         return super().has_add_permission(request)
 
-    # ⚠️ ACTION: precisa receber (self, request, queryset)
+    def pontuacao_formatada(self, obj):
+        return f"{obj.pontuacao:.2f}"
+    pontuacao_formatada.short_description = "Pontuação"
+
     def exportar_excel(self, request, queryset):
         wb = Workbook()
         ws = wb.active
@@ -54,61 +56,40 @@ class ProducaoAdmin(admin.ModelAdmin):
         ws.append(headers)
 
         for p in queryset:
-            # garante número/decimal como float e datas formatadas
             pont = float(p.pontuacao) if isinstance(p.pontuacao, Decimal) else round(p.pontuacao, 2)
             ws.append([
-                p.data,  # deixamos como date; abaixo seto number_format
+                p.data,
                 p.policial.nome_guerra,
                 p.policial.re,
                 p.policial.pelotao,
-                p.pessoa,
-                p.pessoas_aisp,
-                p.carros,
-                p.carros_aisp,
-                p.motos,
-                p.motos_aisp,
-                p.qnt_ocorrencias,
-                p.flagrantes,
-                p.flagrantes_aisp,
-                p.autuacoes,
-                p.raia,
-                p.procurado,
-                p.carro_apreendido,
-                p.moto_apreendida,
-                p.flagrantes_outros,
-                p.arma,
-                p.escolas,
-                round(pont, 2),
+                p.pessoa, p.pessoas_aisp, p.carros, p.carros_aisp,
+                p.motos, p.motos_aisp, p.qnt_ocorrencias, p.flagrantes,
+                p.flagrantes_aisp, p.autuacoes, p.raia, p.procurado,
+                p.carro_apreendido, p.moto_apreendida, p.flagrantes_outros,
+                p.arma, p.escolas, round(pont, 2),
             ])
 
-        # Formatação: cabeçalho centralizado e largura aproximada
         for col_idx in range(1, len(headers) + 1):
             col_letter = get_column_letter(col_idx)
             ws.column_dimensions[col_letter].width = 16
             ws[f'{col_letter}1'].alignment = Alignment(horizontal='center', vertical='center')
 
-        # Formato de data na coluna A
         for row in ws.iter_rows(min_row=2, min_col=1, max_col=1):
             for cell in row:
                 cell.number_format = 'yyyy-mm-dd'
-
-        # Congela cabeçalho
         ws.freeze_panes = 'A2'
 
-        # 🟩 Caminho histórico
         pasta_exportacao = r'C:\relatorios\producoes'
         os.makedirs(pasta_exportacao, exist_ok=True)
         nome_arquivo = f"producao_{datetime.now().strftime('%Y-%m-%d_%Hh%Mm')}.xlsx"
         caminho_historico = os.path.join(pasta_exportacao, nome_arquivo)
         wb.save(caminho_historico)
 
-        # 🟨 Caminho fixo Power BI
         pasta_powerbi = r'C:\relatorios\powerbi'
         os.makedirs(pasta_powerbi, exist_ok=True)
         caminho_powerbi = os.path.join(pasta_powerbi, 'producao_powerbi.xlsx')
         wb.save(caminho_powerbi)
 
-        # ⬇️ Retorna também como download
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
@@ -116,14 +97,9 @@ class ProducaoAdmin(admin.ModelAdmin):
         wb.save(response)
         return response
 
-    # (opcional) descrição amigável no menu de ações
     exportar_excel.short_description = "Exportar Excel (salva histórico, Power BI e baixa)"
 
     def exportar_csv(self, request, queryset):
-        import os
-        from datetime import datetime
-        from django.http import HttpResponse
-
         pasta_exportacao = r'C:\relatorios\producoes'
         pasta_powerbi = r'C:\relatorios\powerbi'
         os.makedirs(pasta_exportacao, exist_ok=True)
@@ -154,21 +130,18 @@ class ProducaoAdmin(admin.ModelAdmin):
                 p.arma, p.escolas, round(pont, 2)
             ]
 
-        # 🟩 Arquivo histórico
         with open(caminho_historico, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerow(campos)
             for p in queryset:
                 writer.writerow(_linha(p))
 
-        # 🟨 Arquivo fixo Power BI
         with open(caminho_powerbi, 'w', newline='', encoding='utf-8') as f2:
             writer = csv.writer(f2)
             writer.writerow(campos)
             for p in queryset:
                 writer.writerow(_linha(p))
 
-        # ⬇️ Download imediato também
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = f'attachment; filename="{nome_arquivo}"'
         writer = csv.writer(response)
@@ -177,27 +150,85 @@ class ProducaoAdmin(admin.ModelAdmin):
             writer.writerow(_linha(p))
         return response
 
-    def pontuacao_formatada(self, obj):
-        return f"{obj.pontuacao:.2f}"
-    # (tinha um typo aqui)
-    pontuacao_formatada.short_description = "Pontuação"
-
 
 @admin.register(EquipeProdutividade)
 class EquipeProdutividadeAdmin(admin.ModelAdmin):
-    list_display = ('data', 'pelotao', 'pontuacao', 'gerou_individual')
-    filter_horizontal = ('policiais',)
+    list_display = ('data', 'pelotao', 'pontuacao_formatada', 'gerou_individual')
     list_filter = ('pelotao', 'data', 'gerou_individual')
+    filter_horizontal = ('policiais',)
     search_fields = ('pelotao',)
+    actions = ['exportar_excel']
+
+    def pontuacao_formatada(self, obj):
+        return f"{obj.pontuacao:.2f}"
+    pontuacao_formatada.short_description = "Pontuação"
+
+    def exportar_excel(self, request, queryset):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'Equipes'
+
+        headers = [
+            'Data', 'Pelotão', 'Policiais',
+            'Pessoas', 'Pessoas AISP', 'Carros', 'Carros AISP',
+            'Motos', 'Motos AISP', 'Ocorrências', 'Flagrantes',
+            'Flagrantes AISP', 'Autuações', 'Raia', 'Procurado',
+            'Carros Apreendidos', 'Motos Apreendidas', 'Flagrantes Outros',
+            'Armas', 'Escolas', 'Pontuação'
+        ]
+        ws.append(headers)
+
+        for equipe in queryset:
+            pont = float(equipe.pontuacao)
+            nomes = ", ".join(p.nome_guerra for p in equipe.policiais.all())
+            ws.append([
+                equipe.data,
+                equipe.pelotao,
+                nomes,
+                equipe.pessoa, equipe.pessoas_aisp, equipe.carros, equipe.carros_aisp,
+                equipe.motos, equipe.motos_aisp, equipe.qnt_ocorrencias, equipe.flagrantes,
+                equipe.flagrantes_aisp, equipe.autuacoes, equipe.raia, equipe.procurado,
+                equipe.carro_apreendido, equipe.moto_apreendida, equipe.flagrantes_outros,
+                equipe.arma, equipe.escolas, round(pont, 2)
+            ])
+
+        # Formatação
+        for col_idx in range(1, len(headers) + 1):
+            col_letter = get_column_letter(col_idx)
+            ws.column_dimensions[col_letter].width = 18
+            ws[f'{col_letter}1'].alignment = Alignment(horizontal='center', vertical='center')
+
+        ws.freeze_panes = 'A2'
+
+        # 🟩 Salvar no histórico
+        pasta_exportacao = r'C:\relatorios\equipes'
+        os.makedirs(pasta_exportacao, exist_ok=True)
+        nome_arquivo = f"equipes_{datetime.now().strftime('%Y-%m-%d_%Hh%Mm')}.xlsx"
+        caminho_historico = os.path.join(pasta_exportacao, nome_arquivo)
+        wb.save(caminho_historico)
+
+        # 🟨 Salvar Power BI
+        pasta_powerbi = r'C:\relatorios\powerbi'
+        os.makedirs(pasta_powerbi, exist_ok=True)
+        caminho_powerbi = os.path.join(pasta_powerbi, 'equipes_powerbi.xlsx')
+        wb.save(caminho_powerbi)
+
+        # ⬇️ Download no navegador
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = f'attachment; filename="{nome_arquivo}"'
+        wb.save(response)
+        return response
+
+    exportar_excel.short_description = "Exportar Excel (salva histórico, Power BI e baixa)"
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
 
         if obj.gerou_individual:
-            # ⚠️ Remove produções antigas para evitar duplicação
             Producao.objects.filter(data=obj.data, policial__in=obj.policiais.all()).delete()
 
-            # 🚀 Gera novamente para cada policial
             for policial in obj.policiais.all():
                 Producao.objects.create(
                     policial=policial,
@@ -222,7 +253,13 @@ class EquipeProdutividadeAdmin(admin.ModelAdmin):
                     observacao=f"(Equipe) {obj.observacao or ''}".strip(),
                 )
 
-            self.message_user(request, f"✔ Produção individual atualizada para {obj.policiais.count()} policiais.")
-
+            self.message_user(
+                request,
+                f"✔ Produção individual atualizada para {obj.policiais.count()} policiais."
+            )
         else:
-            self.message_user(request, "ℹ️ Produção individual **não** foi gerada. Marque 'gerou individual' para habilitar esse recurso.", level=messages.WARNING)
+            self.message_user(
+                request,
+                "ℹ️ Produção individual **não** foi gerada. Marque 'gerou individual' para habilitar esse recurso.",
+                level=messages.WARNING
+            )

@@ -137,8 +137,35 @@ class EquipeProdutividade(models.Model):
     observacao = models.TextField(blank=True, null=True)
     criado_em = models.DateTimeField(auto_now_add=True)
 
+    # ✅ CAMPO necessário para saber se foi gerado individualmente
+    gerou_individual = models.BooleanField(default=False)
+
     def __str__(self):
         return f"Equipe {self.pelotao} - {self.data.strftime('%d/%m/%Y')}"
+
+    # ✅ Property de pontuação total
+    @property
+    def pontuacao(self):
+        pesos = {
+            'pessoa': 0.01,
+            'carros': 0.01,
+            'motos': 0.01,
+            'pessoas_aisp': 0.1,
+            'carros_aisp': 0.1,
+            'motos_aisp': 0.1,
+            'qnt_ocorrencias': 0.01,
+            'flagrantes': 2,
+            'flagrantes_aisp': 3,
+            'autuacoes': 0.05,
+            'raia': 0.01,
+            'procurado': 1,
+            'carro_apreendido': 0.2,
+            'moto_apreendida': 0.2,
+            'flagrantes_outros': 0.5,
+            'arma': 1,
+            'escolas': 0.01,
+        }
+        return round(sum(getattr(self, campo) * peso for campo, peso in pesos.items()), 2)
 
     class Meta:
         verbose_name = "Equipe"
